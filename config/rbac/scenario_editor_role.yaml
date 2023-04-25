@@ -1,0 +1,31 @@
+# permissions for end users to edit scenarios.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: scenario-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: threatester
+    app.kubernetes.io/part-of: threatester
+    app.kubernetes.io/managed-by: kustomize
+  name: scenario-editor-role
+rules:
+- apiGroups:
+  - threatester.github.io
+  resources:
+  - scenarios
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - threatester.github.io
+  resources:
+  - scenarios/status
+  verbs:
+  - get
