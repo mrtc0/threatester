@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -28,8 +29,8 @@ type ScenarioSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Scenario. Edit scenario_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Templates    []Template    `json:"templates"`
+	Expectations []Expectation `json:"expectations,omitempty"`
 }
 
 // ScenarioStatus defines the observed state of Scenario
@@ -57,6 +58,25 @@ type ScenarioList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Scenario `json:"items"`
+}
+
+type Template struct {
+	Name      string            `json:"name,omitempty"`
+	Container *corev1.Container `json:"container,omitempty"`
+}
+
+type Expectation struct {
+	Timeout string              `json:"timeout,omitempty"`
+	Datadog *DatadogExpectation `json:"datadog,omitempty"`
+}
+
+type DatadogExpectation struct {
+	Monitor *DatadogMonitor `json:"monitor,omitempty"`
+}
+
+type DatadogMonitor struct {
+	ID     string `json:"id,omitempty"`
+	Status string `json:"status,omitempty"`
 }
 
 func init() {

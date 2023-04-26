@@ -9,4 +9,15 @@ metadata:
     app.kubernetes.io/created-by: threatester
   name: scenario-sample
 spec:
-  # TODO(user): Add fields here
+  templates:
+    - name: access-serviceaccount-token
+      container:
+        name: 'access-serviceaccount-token'
+        image: alpine:3.17.3
+        command: ['cat', '/var/run/secrets/kubernetes.io/serviceaccount/token']
+  expectations:
+    - timeout: 10s
+      datadog:
+        monitor:
+          id: "12345"
+          status: Alert
