@@ -32,6 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	threatestergithubiov1alpha1 "github.com/mrtc0/threatester/api/v1alpha1"
+	"github.com/mrtc0/threatester/internal/application/expectation"
+	"github.com/mrtc0/threatester/internal/application/scenario"
 	"github.com/mrtc0/threatester/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
@@ -89,9 +91,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	client := mgr.GetClient()
 	if err = (&controller.ScenarioReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:              client,
+		Scheme:              mgr.GetScheme(),
+		ExpectationService:  expectation.NewExpectationService(),
+		ScenarioJobExecutor: scenario.NewScenarioJobExecutor(client),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Scenario")
 		os.Exit(1)

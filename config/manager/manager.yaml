@@ -98,5 +98,16 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
+        env:
+          - name: DD_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: threatester-credentials
+                key: "datadog.apikey"
+          - name: DD_APP_KEY
+            valueFrom:
+              secretKeyRef:
+                name: threatester-credentials
+                key: "datadog.appkey"
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
