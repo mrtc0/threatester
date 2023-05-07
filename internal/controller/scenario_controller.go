@@ -33,8 +33,7 @@ import (
 
 	threatestergithubiov1alpha1 "github.com/mrtc0/threatester/api/v1alpha1"
 	"github.com/mrtc0/threatester/internal/application/expectation"
-	"github.com/mrtc0/threatester/internal/application/scenario"
-	scenarioDomain "github.com/mrtc0/threatester/internal/domain/scenario"
+	scenarioApplication "github.com/mrtc0/threatester/internal/application/scenario"
 )
 
 const (
@@ -50,7 +49,7 @@ type ScenarioReconciler struct {
 	client.Client
 	Scheme              *runtime.Scheme
 	ExpectationService  expectation.ExpectationService
-	ScenarioJobExecutor scenario.ScenarioJobExecutor
+	ScenarioJobExecutor scenarioApplication.ScenarioJobExecutor
 }
 
 //+kubebuilder:rbac:groups=threatester.github.io,resources=scenarios,verbs=get;list;watch;create;update;patch;delete
@@ -173,7 +172,7 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
-	scenarioJob, err := scenarioDomain.NewScenarioJobBuilder().WithNamespace(req.Namespace).WithScenarioJobs(scenario.Spec.Templates).Build()
+	scenarioJob, err := scenarioApplication.NewScenarioJobBuilder().WithNamespace(req.Namespace).WithScenarioJobs(scenario.Spec.Templates).Build()
 	if err != nil {
 		log.Error(err, "failed to build scenario job")
 		return ctrl.Result{}, err
