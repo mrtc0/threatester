@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -39,6 +41,19 @@ type ScenarioStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	Status     string             `json:"status,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
+	Result     ExpectationResult  `json:"result,omitempty"`
+}
+
+type ExpectationResult struct {
+	Passed                bool                `json:"passed,omitempty"`
+	Duration              time.Duration       `json:"duration,omitempty"`
+	SucceededExpectations []Expectation       `json:"succeededExpectations,omitempty"`
+	FailedExpectations    []FailedExpectation `json:"failedExpectations,omitempty"`
+}
+
+type FailedExpectation struct {
+	Expectation Expectation `json:"expectation,omitempty"`
+	Reason      string      `json:"reason,omitempty"`
 }
 
 //+kubebuilder:object:root=true

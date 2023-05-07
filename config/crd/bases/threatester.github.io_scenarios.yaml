@@ -1409,6 +1409,56 @@ spec:
                   - type
                   type: object
                 type: array
+              result:
+                properties:
+                  duration:
+                    description: A Duration represents the elapsed time between two
+                      instants as an int64 nanosecond count. The representation limits
+                      the largest representable duration to approximately 290 years.
+                    format: int64
+                    type: integer
+                  failedExpectations:
+                    items:
+                      properties:
+                        expectation:
+                          properties:
+                            datadog:
+                              properties:
+                                monitor:
+                                  properties:
+                                    id:
+                                      type: string
+                                    status:
+                                      type: string
+                                  type: object
+                              type: object
+                            timeout:
+                              type: string
+                          type: object
+                        reason:
+                          type: string
+                      type: object
+                    type: array
+                  passed:
+                    type: boolean
+                  succeededExpectations:
+                    items:
+                      properties:
+                        datadog:
+                          properties:
+                            monitor:
+                              properties:
+                                id:
+                                  type: string
+                                status:
+                                  type: string
+                              type: object
+                          type: object
+                        timeout:
+                          type: string
+                      type: object
+                    type: array
+                type: object
               status:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying

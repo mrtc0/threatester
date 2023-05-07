@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -87,11 +89,17 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// update status as Unknown when no status are avaiable
 	if scenario.Status.Conditions == nil || len(scenario.Status.Conditions) == 0 {
-		scenario, err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeProgressingScenario, Status: metav1.ConditionUnknown, Reason: "Reconciling", Message: "Starting Reconciling"})
+		err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeProgressingScenario, Status: metav1.ConditionUnknown, Reason: "Reconciling", Message: "Starting Reconciling"})
 		if err != nil {
 			log.Error(err, "failed to update scenario status")
 			return ctrl.Result{}, err
 		}
+	}
+
+	err = r.Get(ctx, req.NamespacedName, scenario)
+	if err != nil {
+		log.Error(err, "failed to fe-fetch scenario")
+		return ctrl.Result{}, err
 	}
 
 	// Add Finalaizer
@@ -120,7 +128,7 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if controllerutil.ContainsFinalizer(scenario, scenarioFinalizer) {
 			log.Info("Performing finalizer operation for scenario")
 
-			scenario, err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionUnknown, Reason: "Finalizing", Message: fmt.Sprintf("Performing finalizer operation for %s", scenario.Name)})
+			err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionUnknown, Reason: "Finalizing", Message: fmt.Sprintf("Performing finalizer operation for %s", scenario.Name)})
 			if err != nil {
 				log.Error(err, "failed to update scenario status")
 				return ctrl.Result{}, err
@@ -128,13 +136,19 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 			// TODO: remove all scneario jobs
 
-			scenario, err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionTrue, Reason: "Finalizing", Message: fmt.Sprintf("Successfully finalizer operation %s", scenario.Name)})
+			err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionTrue, Reason: "Finalizing", Message: fmt.Sprintf("Successfully finalizer operation %s", scenario.Name)})
 			if err != nil {
 				log.Error(err, "failed to update scenario status")
 				return ctrl.Result{}, err
 			}
 
 			log.Info("Removing finalizer for scenario after successfully perform the operations")
+			err := r.Get(ctx, req.NamespacedName, scenario)
+			if err != nil {
+				log.Error(err, "failed to fe-fetch scenario")
+				return ctrl.Result{}, err
+			}
+
 			if ok := controllerutil.RemoveFinalizer(scenario, scenarioFinalizer); !ok {
 				log.Error(err, "failed to remove finalizer for schenario")
 				return ctrl.Result{Requeue: true}, err
@@ -173,7 +187,7 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	if err != nil {
 		log.Error(err, "failed to execute scenario job")
-		_, err := r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeFailedScenario, Status: metav1.ConditionFalse, Reason: "Failed", Message: err.Error()})
+		err := r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeFailedScenario, Status: metav1.ConditionFalse, Reason: "Failed", Message: err.Error()})
 		if err != nil {
 			log.Error(err, "failed update scenario status")
 		}
@@ -183,13 +197,15 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	log.Info("Perform sceario expectation")
 
+	// TODO: sleep timeout seconds
+
 	r.ExpectationService.SetExpectations(scenario.Spec.Expectations)
 
 	// TODO: Run all expectations and get the results
-	_, err = r.ExpectationService.RunExpectation(ctx)
+	passed, err := r.ExpectationService.RunExpectation(ctx)
 	if err != nil {
 		log.Error(err, "failed to run expectation")
-		_, err := r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeFailedScenario, Status: metav1.ConditionTrue, Reason: "Failed", Message: err.Error()})
+		err := r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeFailedScenario, Status: metav1.ConditionTrue, Reason: "Failed", Message: err.Error()})
 		if err != nil {
 			log.Error(err, "failed update scenario status")
 		}
@@ -197,7 +213,24 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	log.Info("scenario expectation is success")
-	_, err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeSucceededScenario, Status: metav1.ConditionTrue, Reason: "Success", Message: "Successfully run scenario expectations"})
+
+	duration, _ := time.ParseDuration("1m") // TODO
+	result := threatestergithubiov1alpha1.ExpectationResult{
+		Passed:   passed,
+		Duration: duration, // TODO
+		SucceededExpectations: []threatestergithubiov1alpha1.Expectation{
+			scenario.Spec.Expectations[0],
+		}, // TODO
+		FailedExpectations: []threatestergithubiov1alpha1.FailedExpectation{}, // TODO
+
+	}
+	_, err = r.updateScenarioExpectationResultStatus(ctx, req, result)
+	if err != nil {
+		log.Error(err, "failed update scenario expectation result")
+		return ctrl.Result{}, err
+	}
+
+	err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeSucceededScenario, Status: metav1.ConditionTrue, Reason: "Success", Message: "Successfully run scenario expectations"})
 	if err != nil {
 		log.Error(err, "failed update scenario status")
 		return ctrl.Result{}, err
@@ -206,15 +239,31 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, nil
 }
 
-func (r *ScenarioReconciler) updateScenarioStatus(ctx context.Context, req reconcile.Request, condition metav1.Condition) (*threatestergithubiov1alpha1.Scenario, error) {
+func (r *ScenarioReconciler) updateScenarioStatus(ctx context.Context, req reconcile.Request, condition metav1.Condition) error {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		scenario := &threatestergithubiov1alpha1.Scenario{}
+
+		if err := r.Get(ctx, req.NamespacedName, scenario); err != nil {
+			return err
+		}
+
+		scenario.Status.Status = condition.Type
+		meta.SetStatusCondition(&scenario.Status.Conditions, condition)
+
+		return r.Status().Update(ctx, scenario)
+	})
+
+	return err
+}
+
+func (r *ScenarioReconciler) updateScenarioExpectationResultStatus(ctx context.Context, req reconcile.Request, expectationResult threatestergithubiov1alpha1.ExpectationResult) (*threatestergithubiov1alpha1.Scenario, error) {
 	scenario := &threatestergithubiov1alpha1.Scenario{}
 
 	if err := r.Get(ctx, req.NamespacedName, scenario); err != nil {
 		return nil, err
 	}
 
-	scenario.Status.Status = condition.Type
-	meta.SetStatusCondition(&scenario.Status.Conditions, condition)
+	scenario.Status.Result = expectationResult
 	if err := r.Status().Update(ctx, scenario); err != nil {
 		return nil, err
 	}

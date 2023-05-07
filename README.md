@@ -8,7 +8,6 @@ Threatester is currently under active development and is not suited for any prod
 
 ## Description
 
-
 ![](docs/img/workload.png)
 
 threatester allows you to create a custom resource called a scenario. When you create a scenario with a specified threat scenario, threatester executes it and confirms whether it triggers an alert in your SIEM.  
