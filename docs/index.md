@@ -8,7 +8,31 @@ Threatester is currently under active development and is not suited for any prod
 
 ## Description
 
-TBD
+threatester allows you to create a custom resource called a scenario. When you create a scenario with a specified threat scenario, threatester executes it and confirms whether it triggers an alert in your SIEM.  
+This allows you to perform continuous and declarative security testing.
+
+Here is an example scenario manifest:
+
+```yaml
+# Expect Datadog Monitor alert ID 12345 into an 'Alert' state
+apiVersion: threatester.github.io/v1alpha1
+kind: Scenario
+metadata:
+  name: scenario-sample
+spec:
+  templates:
+    - name: access-sa-token
+      container:
+        name: 'access-sa-token'
+        image: alpine
+        command: ['cat', '/var/run/secrets/kubernetes.io/serviceaccount/token']
+  expectations:
+    - timeout: 10s
+      datadog:
+        monitor:
+          id: "12345"
+          status: Alert
+```
 
 ## Development
 
