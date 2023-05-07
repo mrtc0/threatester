@@ -87,14 +87,9 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// update status as Unknown when no status are avaiable
 	if scenario.Status.Conditions == nil || len(scenario.Status.Conditions) == 0 {
-		meta.SetStatusCondition(&scenario.Status.Conditions, metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionUnknown, Reason: "Reconciling", Message: "Starting Reconciling"})
-		if r.Status().Update(ctx, scenario); err != nil {
+		scenario, err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeProgressingScenario, Status: metav1.ConditionUnknown, Reason: "Reconciling", Message: "Starting Reconciling"})
+		if err != nil {
 			log.Error(err, "failed to update scenario status")
-			return ctrl.Result{}, err
-		}
-
-		if err := r.Get(ctx, req.NamespacedName, scenario); err != nil {
-			log.Error(err, "failed to get scenario")
 			return ctrl.Result{}, err
 		}
 	}
@@ -119,43 +114,22 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 
+	// TODO: refactor
 	isScenarioMarkedToBeDeleted := scenario.GetDeletionTimestamp() != nil
 	if isScenarioMarkedToBeDeleted {
 		if controllerutil.ContainsFinalizer(scenario, scenarioFinalizer) {
 			log.Info("Performing finalizer operation for scenario")
-			meta.SetStatusCondition(
-				&scenario.Status.Conditions,
-				metav1.Condition{
-					Type:    typeAvailableScenario,
-					Status:  metav1.ConditionUnknown,
-					Reason:  "Finalizing",
-					Message: fmt.Sprintf("Performing finalizer operation for %s", scenario.Name),
-				},
-			)
 
-			if err := r.Status().Update(ctx, scenario); err != nil {
+			scenario, err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionUnknown, Reason: "Finalizing", Message: fmt.Sprintf("Performing finalizer operation for %s", scenario.Name)})
+			if err != nil {
 				log.Error(err, "failed to update scenario status")
 				return ctrl.Result{}, err
 			}
 
 			// TODO: remove all scneario jobs
 
-			if err := r.Get(ctx, req.NamespacedName, scenario); err != nil {
-				log.Error(err, "failed to get scenario")
-				return ctrl.Result{}, err
-			}
-
-			meta.SetStatusCondition(
-				&scenario.Status.Conditions,
-				metav1.Condition{
-					Type:    typeAvailableScenario,
-					Status:  metav1.ConditionTrue,
-					Reason:  "Finalizing",
-					Message: fmt.Sprintf("successfully finalizer operation for %s", scenario.Name),
-				},
-			)
-
-			if err := r.Status().Update(ctx, scenario); err != nil {
+			scenario, err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionTrue, Reason: "Finalizing", Message: fmt.Sprintf("Successfully finalizer operation %s", scenario.Name)})
+			if err != nil {
 				log.Error(err, "failed to update scenario status")
 				return ctrl.Result{}, err
 			}
@@ -172,6 +146,11 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 		}
 
+		return ctrl.Result{}, nil
+	}
+
+	if scenario.Status.Status == typeSucceededScenario {
+		log.Info(fmt.Sprintf("scenario %s/%s is already succeeded. skip.", scenario.Namespace, scenario.Name))
 		return ctrl.Result{}, nil
 	}
 
@@ -193,13 +172,10 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	defer r.ScenarioJobExecutor.DeleteScenarioJob(ctx, *scenarioJob)
 
 	if err != nil {
-		meta.SetStatusCondition(
-			&scenario.Status.Conditions,
-			metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionFalse, Reason: "Failed", Message: err.Error()},
-		)
-		if err := r.Status().Update(ctx, scenario); err != nil {
+		log.Error(err, "failed to execute scenario job")
+		_, err := r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeFailedScenario, Status: metav1.ConditionFalse, Reason: "Failed", Message: err.Error()})
+		if err != nil {
 			log.Error(err, "failed update scenario status")
-			return ctrl.Result{}, err
 		}
 
 		return ctrl.Result{}, err
@@ -213,11 +189,15 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	_, err = r.ExpectationService.RunExpectation(ctx)
 	if err != nil {
 		log.Error(err, "failed to run expectation")
+		_, err := r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeFailedScenario, Status: metav1.ConditionTrue, Reason: "Failed", Message: err.Error()})
+		if err != nil {
+			log.Error(err, "failed update scenario status")
+		}
 		return ctrl.Result{}, err
 	}
 
 	log.Info("scenario expectation is success")
-	_, err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionTrue, Reason: "Success", Message: "Successfully run scenario expectations"})
+	_, err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeSucceededScenario, Status: metav1.ConditionTrue, Reason: "Success", Message: "Successfully run scenario expectations"})
 	if err != nil {
 		log.Error(err, "failed update scenario status")
 		return ctrl.Result{}, err
@@ -233,6 +213,7 @@ func (r *ScenarioReconciler) updateScenarioStatus(ctx context.Context, req recon
 		return nil, err
 	}
 
+	scenario.Status.Status = condition.Type
 	meta.SetStatusCondition(&scenario.Status.Conditions, condition)
 	if err := r.Status().Update(ctx, scenario); err != nil {
 		return nil, err

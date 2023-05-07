@@ -42,13 +42,15 @@ func (e *scenarioJobExecutor) Execute(ctx context.Context, scenarioJob batchv1.J
 		return err
 	}
 
+	// TODO: refactor
 	err = func() error {
 		for {
 			job := &batchv1.Job{}
 			err := e.Get(ctx, types.NamespacedName{Name: scenarioJob.Name, Namespace: scenarioJob.Namespace}, job)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					return err
+					time.Sleep(RetryInterval)
+					continue
 				}
 
 				return fmt.Errorf("failed to get scenario job: %w", err)
