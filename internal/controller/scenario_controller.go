@@ -186,12 +186,6 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
-	err = r.Create(ctx, scenarioJob)
-	if err != nil {
-		log.Error(err, "failed to create scenario job")
-		return ctrl.Result{}, err
-	}
-
 	err = r.ScenarioJobExecutor.Execute(ctx, *scenarioJob)
 	defer r.ScenarioJobExecutor.DeleteScenarioJob(ctx, *scenarioJob)
 

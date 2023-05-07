@@ -32,7 +32,12 @@ func NewScenarioJobExecutor(client client.Client) ScenarioJobExecutor {
 }
 
 func (e *scenarioJobExecutor) Execute(ctx context.Context, scenarioJob batchv1.Job) error {
-	err := func() error {
+	err := e.Create(ctx, &scenarioJob)
+	if err != nil {
+		return err
+	}
+
+	err = func() error {
 		for {
 			job := &batchv1.Job{}
 			err := e.Get(ctx, types.NamespacedName{Name: scenarioJob.Name, Namespace: scenarioJob.Namespace}, job)
