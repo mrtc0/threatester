@@ -117,7 +117,7 @@ var _ = Describe("Scenario controller", func() {
 
 				latestStatusCondition := found.Status.Conditions[len(found.Status.Conditions)-1]
 				expectLatestStatusCondition := metav1.Condition{
-					Type:    typeAvailableScenario,
+					Type:    typeSucceededScenario,
 					Status:  metav1.ConditionTrue,
 					Reason:  "Success",
 					Message: "Successfully run scenario expectations",

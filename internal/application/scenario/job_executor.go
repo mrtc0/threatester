@@ -9,12 +9,17 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const RetryInterval = 5 * time.Second
+
+var (
+	defaultDeletePropagation = metav1.DeletePropagationBackground
+)
 
 type ScenarioJobExecutor interface {
 	Execute(ctx context.Context, scenarioJob batchv1.Job) error
@@ -70,7 +75,8 @@ func (e *scenarioJobExecutor) Execute(ctx context.Context, scenarioJob batchv1.J
 
 func (e *scenarioJobExecutor) DeleteScenarioJob(ctx context.Context, job batchv1.Job) error {
 	log := log.FromContext(ctx)
-	err := e.Client.Delete(ctx, &job)
+
+	err := e.Client.Delete(ctx, &job, &client.DeleteOptions{PropagationPolicy: &defaultDeletePropagation})
 	if err != nil {
 		log.Error(err, fmt.Sprintf("failed to delete scenario job %s/%s", job.Namespace, job.Name))
 		return fmt.Errorf("failed to delete scenario job: %w", err)

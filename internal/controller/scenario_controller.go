@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	threatestergithubiov1alpha1 "github.com/mrtc0/threatester/api/v1alpha1"
 	"github.com/mrtc0/threatester/internal/application/expectation"
@@ -40,6 +41,8 @@ const (
 	scenarioFinalizer = "threatester.github.io/finalizers"
 
 	typeAvailableScenario   = "Available"
+	typeSucceededScenario   = "Succeeded"
+	typeFailedScenario      = "Failed"
 	typeProgressingScenario = "Progressing"
 	typeDegradedScenario    = "Degraded"
 )
@@ -214,22 +217,28 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	log.Info("scenario expectation is success")
-	if err := r.Get(ctx, req.NamespacedName, scenario); err != nil {
-		log.Error(err, "Failed to re-fetch scenario")
-		return ctrl.Result{}, err
-	}
-
-	meta.SetStatusCondition(
-		&scenario.Status.Conditions,
-		metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionTrue, Reason: "Success", Message: "Successfully run scenario expectations"},
-	)
-
-	if err := r.Status().Update(ctx, scenario); err != nil {
+	_, err = r.updateScenarioStatus(ctx, req, metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionTrue, Reason: "Success", Message: "Successfully run scenario expectations"})
+	if err != nil {
 		log.Error(err, "failed update scenario status")
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ScenarioReconciler) updateScenarioStatus(ctx context.Context, req reconcile.Request, condition metav1.Condition) (*threatestergithubiov1alpha1.Scenario, error) {
+	scenario := &threatestergithubiov1alpha1.Scenario{}
+
+	if err := r.Get(ctx, req.NamespacedName, scenario); err != nil {
+		return nil, err
+	}
+
+	meta.SetStatusCondition(&scenario.Status.Conditions, condition)
+	if err := r.Status().Update(ctx, scenario); err != nil {
+		return nil, err
+	}
+
+	return scenario, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
