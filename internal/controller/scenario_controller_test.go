@@ -10,6 +10,7 @@ import (
 	scenarioApplication "github.com/mrtc0/threatester/internal/application/scenario"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -94,7 +95,10 @@ var _ = Describe("Scenario controller", func() {
 					},
 				},
 				ScenarioJobExecutor: &scenarioApplication.ScenarioJobExecutorMock{
-					ExecuteFunc: func(ctx context.Context, namespacedName types.NamespacedName) error {
+					ExecuteFunc: func(ctx context.Context, scenarioJob batchv1.Job) error {
+						return nil
+					},
+					DeleteScenarioJobFunc: func(ctx context.Context, scenarioJob batchv1.Job) error {
 						return nil
 					},
 				},

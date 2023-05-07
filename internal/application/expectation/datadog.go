@@ -15,25 +15,24 @@ type DatadogExpectation struct {
 	expectation   threatestergithubiov1alpha1.DatadogExpectation
 }
 
-func NewDatadogExpectation(
-	ddExpecation threatestergithubiov1alpha1.DatadogExpectation,
-) DatadogExpectation {
-	expectation := DatadogExpectation{}
-	expectation.datadogClient = datadog.NewDatadogClient()
-	expectation.expectation = ddExpecation
+func NewDatadogExpectation() DatadogExpectation {
+	ddExpectation := DatadogExpectation{}
+	ddExpectation.datadogClient = datadog.NewDatadogClient()
 
-	return expectation
+	return ddExpectation
 }
 
-func (e DatadogExpectation) RunExpectation(ctx context.Context) (bool, error) {
-	if e.expectation.Monitor != nil {
-		return e.ExpectMonitorState(ctx, e.expectation.Monitor.Status)
+func (e *DatadogExpectation) RunExpectation(ctx context.Context, expectation threatestergithubiov1alpha1.DatadogExpectation) (bool, error) {
+	e.expectation = expectation
+
+	if expectation.Monitor != nil {
+		return e.ExpectMonitorState(ctx, expectation.Monitor.Status)
 	}
 
-	return false, fmt.Errorf("no expectation found")
+	return false, fmt.Errorf("datadog expectation not found")
 }
 
-func (e DatadogExpectation) ExpectMonitorState(ctx context.Context, expectState string) (bool, error) {
+func (e *DatadogExpectation) ExpectMonitorState(ctx context.Context, expectState string) (bool, error) {
 	monitorID, err := strconv.ParseInt(e.expectation.Monitor.ID, 10, 64)
 	if err != nil {
 		return false, err

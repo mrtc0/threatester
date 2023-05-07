@@ -5,7 +5,7 @@ package scenario
 
 import (
 	"context"
-	"k8s.io/apimachinery/pkg/types"
+	batchv1 "k8s.io/api/batch/v1"
 	"sync"
 )
 
@@ -19,7 +19,10 @@ var _ ScenarioJobExecutor = &ScenarioJobExecutorMock{}
 //
 //		// make and configure a mocked ScenarioJobExecutor
 //		mockedScenarioJobExecutor := &ScenarioJobExecutorMock{
-//			ExecuteFunc: func(ctx context.Context, namespacedName types.NamespacedName) error {
+//			DeleteScenarioJobFunc: func(ctx context.Context, scenarioJob batchv1.Job) error {
+//				panic("mock out the DeleteScenarioJob method")
+//			},
+//			ExecuteFunc: func(ctx context.Context, scenarioJob batchv1.Job) error {
 //				panic("mock out the Execute method")
 //			},
 //		}
@@ -29,38 +32,85 @@ var _ ScenarioJobExecutor = &ScenarioJobExecutorMock{}
 //
 //	}
 type ScenarioJobExecutorMock struct {
+	// DeleteScenarioJobFunc mocks the DeleteScenarioJob method.
+	DeleteScenarioJobFunc func(ctx context.Context, scenarioJob batchv1.Job) error
+
 	// ExecuteFunc mocks the Execute method.
-	ExecuteFunc func(ctx context.Context, namespacedName types.NamespacedName) error
+	ExecuteFunc func(ctx context.Context, scenarioJob batchv1.Job) error
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// DeleteScenarioJob holds details about calls to the DeleteScenarioJob method.
+		DeleteScenarioJob []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// ScenarioJob is the scenarioJob argument value.
+			ScenarioJob batchv1.Job
+		}
 		// Execute holds details about calls to the Execute method.
 		Execute []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// NamespacedName is the namespacedName argument value.
-			NamespacedName types.NamespacedName
+			// ScenarioJob is the scenarioJob argument value.
+			ScenarioJob batchv1.Job
 		}
 	}
-	lockExecute sync.RWMutex
+	lockDeleteScenarioJob sync.RWMutex
+	lockExecute           sync.RWMutex
+}
+
+// DeleteScenarioJob calls DeleteScenarioJobFunc.
+func (mock *ScenarioJobExecutorMock) DeleteScenarioJob(ctx context.Context, scenarioJob batchv1.Job) error {
+	if mock.DeleteScenarioJobFunc == nil {
+		panic("ScenarioJobExecutorMock.DeleteScenarioJobFunc: method is nil but ScenarioJobExecutor.DeleteScenarioJob was just called")
+	}
+	callInfo := struct {
+		Ctx         context.Context
+		ScenarioJob batchv1.Job
+	}{
+		Ctx:         ctx,
+		ScenarioJob: scenarioJob,
+	}
+	mock.lockDeleteScenarioJob.Lock()
+	mock.calls.DeleteScenarioJob = append(mock.calls.DeleteScenarioJob, callInfo)
+	mock.lockDeleteScenarioJob.Unlock()
+	return mock.DeleteScenarioJobFunc(ctx, scenarioJob)
+}
+
+// DeleteScenarioJobCalls gets all the calls that were made to DeleteScenarioJob.
+// Check the length with:
+//
+//	len(mockedScenarioJobExecutor.DeleteScenarioJobCalls())
+func (mock *ScenarioJobExecutorMock) DeleteScenarioJobCalls() []struct {
+	Ctx         context.Context
+	ScenarioJob batchv1.Job
+} {
+	var calls []struct {
+		Ctx         context.Context
+		ScenarioJob batchv1.Job
+	}
+	mock.lockDeleteScenarioJob.RLock()
+	calls = mock.calls.DeleteScenarioJob
+	mock.lockDeleteScenarioJob.RUnlock()
+	return calls
 }
 
 // Execute calls ExecuteFunc.
-func (mock *ScenarioJobExecutorMock) Execute(ctx context.Context, namespacedName types.NamespacedName) error {
+func (mock *ScenarioJobExecutorMock) Execute(ctx context.Context, scenarioJob batchv1.Job) error {
 	if mock.ExecuteFunc == nil {
 		panic("ScenarioJobExecutorMock.ExecuteFunc: method is nil but ScenarioJobExecutor.Execute was just called")
 	}
 	callInfo := struct {
-		Ctx            context.Context
-		NamespacedName types.NamespacedName
+		Ctx         context.Context
+		ScenarioJob batchv1.Job
 	}{
-		Ctx:            ctx,
-		NamespacedName: namespacedName,
+		Ctx:         ctx,
+		ScenarioJob: scenarioJob,
 	}
 	mock.lockExecute.Lock()
 	mock.calls.Execute = append(mock.calls.Execute, callInfo)
 	mock.lockExecute.Unlock()
-	return mock.ExecuteFunc(ctx, namespacedName)
+	return mock.ExecuteFunc(ctx, scenarioJob)
 }
 
 // ExecuteCalls gets all the calls that were made to Execute.
@@ -68,12 +118,12 @@ func (mock *ScenarioJobExecutorMock) Execute(ctx context.Context, namespacedName
 //
 //	len(mockedScenarioJobExecutor.ExecuteCalls())
 func (mock *ScenarioJobExecutorMock) ExecuteCalls() []struct {
-	Ctx            context.Context
-	NamespacedName types.NamespacedName
+	Ctx         context.Context
+	ScenarioJob batchv1.Job
 } {
 	var calls []struct {
-		Ctx            context.Context
-		NamespacedName types.NamespacedName
+		Ctx         context.Context
+		ScenarioJob batchv1.Job
 	}
 	mock.lockExecute.RLock()
 	calls = mock.calls.Execute

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,7 +38,7 @@ import (
 )
 
 const (
-	scenarioFinalizer = "threatester.github.io/finalizer"
+	scenarioFinalizer = "threatester.github.io/finalizers"
 
 	typeAvailableScenario   = "Available"
 	typeProgressingScenario = "Progressing"
@@ -109,6 +110,11 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			log.Error(err, "Failed to update custom resource with finalizer")
 			return ctrl.Result{}, err
 		}
+
+		if err := r.Get(ctx, req.NamespacedName, scenario); err != nil {
+			log.Error(err, "failed to fe-fetch scenario")
+			return ctrl.Result{}, err
+		}
 	}
 
 	isScenarioMarkedToBeDeleted := scenario.GetDeletionTimestamp() != nil
@@ -173,13 +179,22 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	found := &batchv1.Job{}
+	err = r.Get(ctx, types.NamespacedName{Name: scenarioJob.Name, Namespace: scenarioJob.Namespace}, found)
+
+	if err == nil {
+		log.Info("scenario job already exists. skip.")
+		return ctrl.Result{}, nil
+	}
+
 	err = r.Create(ctx, scenarioJob)
 	if err != nil {
 		log.Error(err, "failed to create scenario job")
 		return ctrl.Result{}, err
 	}
 
-	err = r.ScenarioJobExecutor.Execute(ctx, types.NamespacedName{Name: scenarioJob.Name, Namespace: scenarioJob.Namespace})
+	err = r.ScenarioJobExecutor.Execute(ctx, *scenarioJob)
+	defer r.ScenarioJobExecutor.DeleteScenarioJob(ctx, *scenarioJob)
 
 	if err != nil {
 		meta.SetStatusCondition(
@@ -206,6 +221,11 @@ func (r *ScenarioReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	log.Info("scenario expectation is success")
+	if err := r.Get(ctx, req.NamespacedName, scenario); err != nil {
+		log.Error(err, "Failed to re-fetch scenario")
+		return ctrl.Result{}, err
+	}
+
 	meta.SetStatusCondition(
 		&scenario.Status.Conditions,
 		metav1.Condition{Type: typeAvailableScenario, Status: metav1.ConditionTrue, Reason: "Success", Message: "Successfully run scenario expectations"},

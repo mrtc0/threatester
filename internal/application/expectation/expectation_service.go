@@ -20,17 +20,19 @@ type expectationService struct {
 }
 
 func NewExpectationService() ExpectationService {
-	return &expectationService{}
+	return &expectationService{
+		datadogExpectation: NewDatadogExpectation(),
+	}
 }
 
 func (e *expectationService) RunExpectation(ctx context.Context) (bool, error) {
 	for _, expect := range e.Expectations {
 		if expect.Datadog != nil {
-			return e.datadogExpectation.RunExpectation(ctx)
+			return e.datadogExpectation.RunExpectation(ctx, *expect.Datadog)
 		}
 	}
 
-	return false, fmt.Errorf("no expectation found")
+	return false, fmt.Errorf("expectation not found")
 }
 
 func (e *expectationService) SetExpectations(expectations []threatestergithubiov1alpha1.Expectation) {

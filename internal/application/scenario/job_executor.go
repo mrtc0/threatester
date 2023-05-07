@@ -1,6 +1,6 @@
 package scenario
 
-//go:generate moq -out job_executor_mock.go . ScenarioJobExecutor
+//go:generate moq -rm -out job_executor_mock.go . ScenarioJobExecutor
 
 import (
 	"context"
@@ -11,12 +11,14 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const RetryInterval = 5 * time.Second
 
 type ScenarioJobExecutor interface {
-	Execute(ctx context.Context, namespacedName types.NamespacedName) error
+	Execute(ctx context.Context, scenarioJob batchv1.Job) error
+	DeleteScenarioJob(ctx context.Context, scenarioJob batchv1.Job) error
 }
 
 type scenarioJobExecutor struct {
@@ -29,11 +31,11 @@ func NewScenarioJobExecutor(client client.Client) ScenarioJobExecutor {
 	}
 }
 
-func (e *scenarioJobExecutor) Execute(ctx context.Context, namespacedName types.NamespacedName) error {
+func (e *scenarioJobExecutor) Execute(ctx context.Context, scenarioJob batchv1.Job) error {
 	err := func() error {
 		for {
 			job := &batchv1.Job{}
-			err := e.Get(ctx, namespacedName, job)
+			err := e.Get(ctx, types.NamespacedName{Name: scenarioJob.Name, Namespace: scenarioJob.Namespace}, job)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
 					return err
@@ -49,18 +51,8 @@ func (e *scenarioJobExecutor) Execute(ctx context.Context, namespacedName types.
 
 			switch jobCondition := job.Status.Conditions[0].Type; jobCondition {
 			case batchv1.JobComplete:
-				err = e.Delete(ctx, job)
-				if err != nil {
-					return err
-				}
-
 				return nil
 			case batchv1.JobFailed:
-				err = e.Delete(ctx, job)
-				if err != nil {
-					return err
-				}
-
 				return fmt.Errorf("scenario job is failed")
 			default:
 				time.Sleep(RetryInterval)
@@ -69,4 +61,16 @@ func (e *scenarioJobExecutor) Execute(ctx context.Context, namespacedName types.
 	}()
 
 	return err
+}
+
+func (e *scenarioJobExecutor) DeleteScenarioJob(ctx context.Context, job batchv1.Job) error {
+	log := log.FromContext(ctx)
+	err := e.Client.Delete(ctx, &job)
+	if err != nil {
+		log.Error(err, fmt.Sprintf("failed to delete scenario job %s/%s", job.Namespace, job.Name))
+		return fmt.Errorf("failed to delete scenario job: %w", err)
+	}
+
+	log.Info(fmt.Sprintf("scenario job %s/%s deleted", job.Namespace, job.Name))
+	return nil
 }
